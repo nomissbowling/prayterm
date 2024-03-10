@@ -1,4 +1,4 @@
-#![doc(html_root_url = "https://docs.rs/prayterm/0.1.0")]
+#![doc(html_root_url = "https://docs.rs/prayterm/1.0.0")]
 //! prayterm realtime play nonblocking terminal for Rust with crossterm
 //!
 
@@ -14,6 +14,11 @@ use crossterm::terminal::{self, disable_raw_mode, enable_raw_mode};
 use crossterm::cursor;
 use crossterm::style::{self, Attribute};
 use crossterm::event::{self, Event};
+
+/// tuple TRX for mpsc::channel Result termion Event (not std::error::Error)
+pub type TplTRX = (
+  mpsc::Sender<Result<Event, std::io::Error>>,
+  mpsc::Receiver<Result<Event, std::io::Error>>);
 
 /// NopColor
 pub trait NopColor {
@@ -124,21 +129,14 @@ impl PrayTerm {
 
   /// prepare thread
   pub fn prepare_thread(&self, ms: time::Duration) ->
-    Result<(mpsc::Sender<Event>, mpsc::Receiver<Event>), Box<dyn Error>> {
+    Result<TplTRX, Box<dyn Error>> {
     let (tx, rx) = mpsc::channel();
     if true { // closure once
       let tx = tx.clone();
       let _handle = thread::spawn(move || { // for non blocking to fetch event
         loop { // loop forever
           if !event::poll(ms).expect("poll") { () } // non blocking
-          else {
-            match event::read().expect("read") { // blocking
-            ev => {
-              tx.send(ev).expect("send");
-            }
-            }
-          }
-          ()
+          else { tx.send(event::read()).expect("send"); } // blocking
         }
         // () // not be arrived here (will not be disconnected)
       });
